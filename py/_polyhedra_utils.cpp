@@ -457,8 +457,23 @@ vector<Vector3r> fillBox_Mycpp(Vector3r minCoord, Vector3r maxCoord, Vector3r si
 
 		//**********************************************************************************************************************************************
 		// most important part - generate random position for polyhedron
+
 		position = Vector3r(rand() * (maxCoord[0] - minCoord[0]), rand() * (maxCoord[1] - minCoord[1]), rand() * (maxCoord[2] - minCoord[2])) / RAND_MAX
 		        + minCoord;
+		while (i < 100){
+			boundary
+			random point=min + (max - min) * rand() / RAND_MAX;
+			Polyhedron P = vec_points
+			CGALpoint rand_point = CGALpoint(x, y, z);
+			bool condition = Is_inside_Polyhedron(Polyhedron P, CGALpoint inside);
+			if condition{
+				break;
+			}
+
+			else{
+				continue;
+			}
+		}
 		//**********************************************************************************************************************************************
 
 		//move CGAL structure Polyhedron
