@@ -432,7 +432,6 @@ vector<Vector3r> fillHull_cpp(vector<Vector3r> vec_polyheron, Vector3r sizemin, 
 	boundaryP.Initialize();
 	Polyhedron boundP = boundaryP.GetPolyhedron();
 
-	Vector3r diff_XYZ = maxCoord - minCoord;
 	Vector3r maxCoord(std::numeric_limits<double>::lowest(), 
                       std::numeric_limits<double>::lowest(), 
                       std::numeric_limits<double>::lowest());
@@ -460,6 +459,7 @@ vector<Vector3r> fillHull_cpp(vector<Vector3r> vec_polyheron, Vector3r sizemin, 
 	Real volume_min = sizemin[0] * sizemin[1] * sizemin[2];
 	int max_iterations = (volume_min > 1e-6) ? volume_polyhedron / volume_min : 1000;
 	int count = 0;
+	int trial_count = 0;
 
 	for (int i = 0; i < max_iterations; ++i) {
 		Polyhedra trialP;
@@ -482,10 +482,18 @@ vector<Vector3r> fillHull_cpp(vector<Vector3r> vec_polyheron, Vector3r sizemin, 
 		for (int j = 0; j < max_iterations; ++j) {
 			position = Vector3r(randCoordX(rng), randCoordY(rng), randCoordZ(rng));
 			CGALpoint position_CGAL(position(0), position(1), position(2));
+			trial_count++;
+			std::cout << "This is the " << trial_count << " th trial" << std::endl;
+			
 			if (Is_inside_Polyhedron(boundP, position_CGAL)) {
 				inside_polyhedron = true;
 				break;
 			}
+		}
+
+		if (trial_count > 1000000) {
+			std::cout << "fill_Hull V0.0.3: too many trials > 1000000, stopping" << std::endl;
+			break;
 		}
 
 		if (!inside_polyhedron) continue;
@@ -521,7 +529,7 @@ vector<Vector3r> fillHull_cpp(vector<Vector3r> vec_polyheron, Vector3r sizemin, 
 			++count;
 		}
 	}
-	std::cout << "fill_Hull V0.0.2 generated " << count << " polyhedrons" << std::endl;
+	std::cout << "fill_Hull V0.0.3 generated " << count << " polyhedrons" << std::endl;
 
 	//can't be used - no information about material
 	Scene* scene = Omega::instance().getScene().get();
