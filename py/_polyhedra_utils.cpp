@@ -13,7 +13,8 @@
 #include <pkg/common/Sphere.hpp>
 #include <pkg/polyhedra/Polyhedra.hpp>
 #include <numpy/ndarraytypes.h>
-#inclede <random>
+
+#include <random>
 
 CREATE_CPP_LOCAL_LOGGER("_polyhedra_utils.cpp");
 
@@ -417,22 +418,24 @@ vector<Vector3r> fillBox_cpp(Vector3r minCoord, Vector3r maxCoord, Vector3r size
 
 
 //**********************************************************************************
-//generate "packing" of non-overlapping polyhedrons V2.0
-vector<Vector3r> fillBox_cppV2(vector<Vector3r> vec_polyheron, Vector3r sizemin, Vector3r sizemax, int seed, shared_ptr<Material> mat)
+//generate "packing" of non-overlapping polyhedrons V0.0.2
+vector<Vector3r> fillHull_cpp(vector<Vector3r> vec_polyheron, Vector3r sizemin, Vector3r sizemax, int seed, shared_ptr<Material> mat)
 {
 
 	vector<Vector3r> vertices;
-	Polyhedra        trialP, boundP;
-	Polyhedron       trial;
-
 	vector<Polyhedron>       polyhedrons;
 	vector<vector<Vector3r>> packed_polyhedrons;
-	Vector3r                 position;
 
+	Polyhedra        boundaryP;
+	boundaryP.Clear();
+	boundaryP.v = vec_polyheron;
+	boundaryP.Initialize();
+	Polyhedron boundP = boundaryP.GetPolyhedron();
+
+	Vector3r diff_XYZ = maxCoord - minCoord;
 	Vector3r maxCoord(std::numeric_limits<double>::lowest(), 
                       std::numeric_limits<double>::lowest(), 
                       std::numeric_limits<double>::lowest());
-
 	Vector3r minCoord(std::numeric_limits<double>::max(), 
                       std::numeric_limits<double>::max(), 
                       std::numeric_limits<double>::max());
@@ -441,26 +444,21 @@ vector<Vector3r> fillBox_cppV2(vector<Vector3r> vec_polyheron, Vector3r sizemin,
 		maxCoord = {max(maxCoord[0], point[0]), max(maxCoord[1], point[1]), max(maxCoord[2], point[2])};
 		minCoord = {min(minCoord[0], point[0]), min(minCoord[1], point[1]), min(minCoord[2], point[2])};
 	}
-
-	boundP.Clear();
-	boundP.v = vec_polyheron;
-	boundP.Initialize();
-	Polyhedron bound = boundP.GetPolyhedron();
-
+	
 	//it - number of trials to make packing possibly more/less dense
 	std::mt19937 rng(seed);
-
     std::uniform_real_distribution<double> randSizeX(sizemin[0], sizemax[0]);
     std::uniform_real_distribution<double> randSizeY(sizemin[1], sizemax[1]);
     std::uniform_real_distribution<double> randSizeZ(sizemin[2], sizemax[2]);
-
     std::uniform_real_distribution<double> randCoordX(minCoord[0], maxCoord[0]);
     std::uniform_real_distribution<double> randCoordY(minCoord[1], maxCoord[1]);
     std::uniform_real_distribution<double> randCoordZ(minCoord[2], maxCoord[2]);
-
 	std::uniform_real_distribution<double> randColor(0.0, 1.0); // 颜色值在 0 到 1 之间
 
-	const int max_iterations = 1000;
+	// calculate the volume of the polyhedron
+	Real volume_polyhedron = boundaryP.GetVolume();
+	Real volume_min = sizemin[0] * sizemin[1] * sizemin[2];
+	int max_iterations = (volume_min > 1e-6) ? volume_polyhedron / volume_min : 1000;
 	int count = 0;
 
 	for (int i = 0; i < max_iterations; ++i) {
@@ -471,25 +469,26 @@ vector<Vector3r> fillBox_cppV2(vector<Vector3r> vec_polyheron, Vector3r sizemin,
 		trialP.Initialize();
 
 		Polyhedron trial = trialP.GetPolyhedron();
-		Matrix3r       rot_mat = (trialP.GetOri()).toRotationMatrix();
+		Matrix3r rot_mat = (trialP.GetOri()).toRotationMatrix();
 		Transformation t_rot(rot_mat(0, 0), rot_mat(0, 1), rot_mat(0, 2),
 							 rot_mat(1, 0), rot_mat(1, 1), rot_mat(1, 2),
 							 rot_mat(2, 0), rot_mat(2, 1), rot_mat(2, 2), 1);
 		std::transform(trial.points_begin(), trial.points_end(), trial.points_begin(), t_rot);
 
-		Vector3r position;
 		bool inside_polyhedron = false;
-		
-		for (int j = 0; j < 1000; ++j) {
+		Vector3r position;
+
+		// find a position of random point inside the polyhedron
+		for (int j = 0; j < max_iterations; ++j) {
 			position = Vector3r(randCoordX(rng), randCoordY(rng), randCoordZ(rng));
 			CGALpoint position_CGAL(position(0), position(1), position(2));
-			inside_polyhedron = Is_inside_Polyhedron(bound, position_CGAL);
-			if (inside_polyhedron) {
+			if (Is_inside_Polyhedron(boundP, position_CGAL)) {
+				inside_polyhedron = true;
 				break;
 			}
 		}
 
-		if (inside_polyhedron) continue;
+		if (!inside_polyhedron) continue;
 		
 		//move CGAL structure Polyhedron
 		Polyhedron trial_moved = trial;
@@ -500,13 +499,13 @@ vector<Vector3r> fillBox_cppV2(vector<Vector3r> vec_polyheron, Vector3r sizemin,
 		std::transform(trial_moved.facets_begin(), trial_moved.facets_end(), trial_moved.planes_begin(), Plane_equation());
 
 		bool intersection = false;
-		//call test with boundary
+		// Check for intersections with bounding polyhedron
 		for (Polyhedron::Vertex_iterator vi = trial_moved.vertices_begin(); (vi != trial_moved.vertices_end()) && (!intersection); ++vi) {
 			intersection = (vi->point().x() < minCoord[0]) || (vi->point().x() > maxCoord[0]) ||
 						   (vi->point().y() < minCoord[1]) || (vi->point().y() > maxCoord[1]) ||
 			        	   (vi->point().z() < minCoord[2]) || (vi->point().z() > maxCoord[2]);
 		}
-		//call test with other polyhedrons
+		//Check for intersections with other polyhedrons
 		for (vector<Polyhedron>::iterator a = polyhedrons.begin(); (a != polyhedrons.end()) && (!intersection); ++a) {
 			intersection = do_intersect(*a, trial_moved);
 			if (intersection) break;
@@ -522,7 +521,7 @@ vector<Vector3r> fillBox_cppV2(vector<Vector3r> vec_polyheron, Vector3r sizemin,
 			++count;
 		}
 	}
-	std::cout << "fill_Hull V0.0.2 generated" << count << " polyhedrons" << std::endl;
+	std::cout << "fill_Hull V0.0.2 generated " << count << " polyhedrons" << std::endl;
 
 	//can't be used - no information about material
 	Scene* scene = Omega::instance().getScene().get();
@@ -775,7 +774,7 @@ try {
 	        "Get timestep accoring to the velocity of P-Wave propagation; computed from sphere radii, rigidities and masses.");
 	py::def("do_Polyhedras_Intersect", do_Polyhedras_Intersect, "check polyhedras intersection");
 	py::def("fillBox_cpp", fillBox_cpp, "Generate non-overlaping polyhedrons in box");
-	py::def("fillBox_cppV2", fillBox_cppV2, "Generate non-overlaping polyhedrons in a polyhedron");
+	py::def("fillHull_cpp", fillHull_cpp, "Generate non-overlaping polyhedrons in a convex Hull");
 	py::def("fillBoxByBalls_cpp", fillBoxByBalls_cpp, "Generate non-overlaping 'spherical' polyhedrons in box");
 	py::def("MinCoord", MinCoord, "returns min coordinates");
 	py::def("MaxCoord", MaxCoord, "returns max coordinates");

@@ -149,7 +149,7 @@ def fillBox(mincoord, maxcoord, material, sizemin=[1, 1, 1], sizemax=[1, 1, 1], 
 
 #**********************************************************************************
 #fill a Polyhedron boundary by non-overlaping polyhedrons with random geometry and sizes within the range (uniformly distributed)
-def fillBoxV2(vec_poly, material, sizemin=[1, 1, 1], sizemax=[1, 1, 1], seed=None, mask=1):
+def fillHull(vec_poly, material, sizemin=[1, 1, 1], sizemax=[1, 1, 1], seed=None, mask=1):
 	"""fill box [mincoord, maxcoord] by non-overlaping polyhedrons with random geometry and sizes within the range (uniformly distributed)
 	:param Vector3 mincoord: first corner
 	:param Vector3 maxcoord: second corner
@@ -159,7 +159,7 @@ def fillBoxV2(vec_poly, material, sizemin=[1, 1, 1], sizemax=[1, 1, 1], seed=Non
 	:param float seed: random seed
 	"""
 	random.seed(seed)
-	v = fillBox_cppV2(vec_poly, sizemin, sizemax, random.randint(0, 1E6), material)
+	v = fillHull_cpp(vec_poly, sizemin, sizemax, random.randint(0, 1E6), material)
 	#lastnan = -1
 	#for i in range(0,len(v)):
 	#	if(math.isnan(v[i][0])):
