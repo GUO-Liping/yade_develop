@@ -13,6 +13,7 @@
 #include <pkg/common/Sphere.hpp>
 #include <pkg/polyhedra/Polyhedra.hpp>
 #include <numpy/ndarraytypes.h>
+#inclede <random>
 
 CREATE_CPP_LOCAL_LOGGER("_polyhedra_utils.cpp");
 
@@ -420,103 +421,117 @@ vector<Vector3r> fillBox_cpp(Vector3r minCoord, Vector3r maxCoord, Vector3r size
 vector<Vector3r> fillBox_cppV2(vector<Vector3r> vec_polyheron, Vector3r sizemin, Vector3r sizemax, int seed, shared_ptr<Material> mat)
 {
 
-	vector<Vector3r> v;
+	vector<Vector3r> vertices;
 	Polyhedra        trialP, boundP;
-	Polyhedron       trial, trial_moved, bound;
-	srand(seed);
-	int                      it = 0;
-	vector<Polyhedron>       polyhedrons;
-	vector<vector<Vector3r>> vv;
-	Vector3r                 position;
-	bool                     intersection;
-	bool					 inside_polyhedron;
-	int                      count = 0;
+	Polyhedron       trial;
 
-	Vector3r maxCoord = {1.0, 1.0, 1.0};
-	Vector3r minCoord = {0.0, 0.0, 0.0};
+	vector<Polyhedron>       polyhedrons;
+	vector<vector<Vector3r>> packed_polyhedrons;
+	Vector3r                 position;
+
+	Vector3r maxCoord(std::numeric_limits<double>::lowest(), 
+                      std::numeric_limits<double>::lowest(), 
+                      std::numeric_limits<double>::lowest());
+
+	Vector3r minCoord(std::numeric_limits<double>::max(), 
+                      std::numeric_limits<double>::max(), 
+                      std::numeric_limits<double>::max());
+
+	for (const Vector3r point : vec_polyheron){
+		maxCoord = {max(maxCoord[0], point[0]), max(maxCoord[1], point[1]), max(maxCoord[2], point[2])};
+		minCoord = {min(minCoord[0], point[0]), min(minCoord[1], point[1]), min(minCoord[2], point[2])};
+	}
 
 	boundP.Clear();
 	boundP.v = vec_polyheron;
 	boundP.Initialize();
-	bound = boundP.GetPolyhedron();
+	Polyhedron bound = boundP.GetPolyhedron();
 
 	//it - number of trials to make packing possibly more/less dense
-	Vector3r random_size;
-	while (it < 1000) {
-		it = it + 1;
-		if (it == 1) {
-			trialP.Clear();
-			trialP.seed = rand();
-			trialP.size = Vector3r(rand() * (sizemax[0] - sizemin[0]), rand() * (sizemax[1] - sizemin[1]), rand() * (sizemax[2] - sizemin[2])) / RAND_MAX + sizemin;
-			trialP.Initialize();
-			trial                  = trialP.GetPolyhedron();
-			Matrix3r       rot_mat = (trialP.GetOri()).toRotationMatrix();
-			Transformation t_rot(
-			        rot_mat(0, 0),
-			        rot_mat(0, 1),
-			        rot_mat(0, 2),
-			        rot_mat(1, 0),
-			        rot_mat(1, 1),
-			        rot_mat(1, 2),
-			        rot_mat(2, 0),
-			        rot_mat(2, 1),
-			        rot_mat(2, 2),
-			        1);
-			std::transform(trial.points_begin(), trial.points_end(), trial.points_begin(), t_rot);
-		}
+	std::mt19937 rng(seed);
 
-		int i = 0;
-		while (i < 100) {
-			position = Vector3r(rand() * (maxCoord[0] - minCoord[0]), rand() * (maxCoord[1] - minCoord[1]), rand() * (maxCoord[2] - minCoord[2])) / RAND_MAX + minCoord;
-			CGALpoint pos_CGAL(position(0), position(1), position(2));
-			inside_polyhedron = Is_inside_Polyhedron(bound, pos_CGAL);
+    std::uniform_real_distribution<double> randSizeX(sizemin[0], sizemax[0]);
+    std::uniform_real_distribution<double> randSizeY(sizemin[1], sizemax[1]);
+    std::uniform_real_distribution<double> randSizeZ(sizemin[2], sizemax[2]);
+
+    std::uniform_real_distribution<double> randCoordX(minCoord[0], maxCoord[0]);
+    std::uniform_real_distribution<double> randCoordY(minCoord[1], maxCoord[1]);
+    std::uniform_real_distribution<double> randCoordZ(minCoord[2], maxCoord[2]);
+
+	std::uniform_real_distribution<double> randColor(0.0, 1.0); // 颜色值在 0 到 1 之间
+
+	const int max_iterations = 1000;
+	int count = 0;
+
+	for (int i = 0; i < max_iterations; ++i) {
+		Polyhedra trialP;
+		trialP.Clear();
+		trialP.seed = rng();
+		trialP.size = Vector3r(randSizeX(rng), randSizeY(rng), randSizeZ(rng));
+		trialP.Initialize();
+
+		Polyhedron trial = trialP.GetPolyhedron();
+		Matrix3r       rot_mat = (trialP.GetOri()).toRotationMatrix();
+		Transformation t_rot(rot_mat(0, 0), rot_mat(0, 1), rot_mat(0, 2),
+							 rot_mat(1, 0), rot_mat(1, 1), rot_mat(1, 2),
+							 rot_mat(2, 0), rot_mat(2, 1), rot_mat(2, 2), 1);
+		std::transform(trial.points_begin(), trial.points_end(), trial.points_begin(), t_rot);
+
+		Vector3r position;
+		bool inside_polyhedron = false;
+		
+		for (int j = 0; j < 1000; ++j) {
+			position = Vector3r(randCoordX(rng), randCoordY(rng), randCoordZ(rng));
+			CGALpoint position_CGAL(position(0), position(1), position(2));
+			inside_polyhedron = Is_inside_Polyhedron(bound, position_CGAL);
 			if (inside_polyhedron) {
 				break;
 			}
-			else {
-				i = i + 1;
-			}
 		}
 
+		if (inside_polyhedron) continue;
+		
 		//move CGAL structure Polyhedron
+		Polyhedron trial_moved = trial;
 		Transformation transl(CGAL::TRANSLATION, ToCGALVector(position));
-		trial_moved = trial;
 		std::transform(trial_moved.points_begin(), trial_moved.points_end(), trial_moved.points_begin(), transl);
+
 		//calculate plane equations
 		std::transform(trial_moved.facets_begin(), trial_moved.facets_end(), trial_moved.planes_begin(), Plane_equation());
 
-		intersection = false;
+		bool intersection = false;
 		//call test with boundary
-		for (Polyhedron::Vertex_iterator vi = trial_moved.vertices_begin(); (vi != trial_moved.vertices_end()) && (!intersection); vi++) {
-			intersection = (vi->point().x() < minCoord[0]) || (vi->point().x() > maxCoord[0]) || (vi->point().y() < minCoord[1])
-			        || (vi->point().y() > maxCoord[1]) || (vi->point().z() < minCoord[2]) || (vi->point().z() > maxCoord[2]);
+		for (Polyhedron::Vertex_iterator vi = trial_moved.vertices_begin(); (vi != trial_moved.vertices_end()) && (!intersection); ++vi) {
+			intersection = (vi->point().x() < minCoord[0]) || (vi->point().x() > maxCoord[0]) ||
+						   (vi->point().y() < minCoord[1]) || (vi->point().y() > maxCoord[1]) ||
+			        	   (vi->point().z() < minCoord[2]) || (vi->point().z() > maxCoord[2]);
 		}
 		//call test with other polyhedrons
-		for (vector<Polyhedron>::iterator a = polyhedrons.begin(); (a != polyhedrons.end()) && (!intersection); a++) {
+		for (vector<Polyhedron>::iterator a = polyhedrons.begin(); (a != polyhedrons.end()) && (!intersection); ++a) {
 			intersection = do_intersect(*a, trial_moved);
 			if (intersection) break;
 		}
+
 		if (!intersection) {
 			polyhedrons.push_back(trial_moved);
-			v.clear();
-			for (Polyhedron::Vertex_iterator vi = trial_moved.vertices_begin(); vi != trial_moved.vertices_end(); vi++) {
-				v.push_back(FromCGALPoint(vi->point()));
+			vertices.clear();
+			for (Polyhedron::Vertex_iterator vi = trial_moved.vertices_begin(); vi != trial_moved.vertices_end(); ++vi) {
+				vertices.push_back(FromCGALPoint(vi->point()));
 			}
-			vv.push_back(v);
-			it = 0;
-			count++;
+			packed_polyhedrons.push_back(vertices);
+			++count;
 		}
 	}
-	cout << " V2.0 generated" << count << " polyhedrons" << endl;
+	std::cout << "fill_Hull V0.0.2 generated" << count << " polyhedrons" << std::endl;
 
 	//can't be used - no information about material
 	Scene* scene = Omega::instance().getScene().get();
-	for (vector<vector<Vector3r>>::iterator p = vv.begin(); p != vv.end(); ++p) {
-		shared_ptr<Body> BP = NewPolyhedra(*p, mat);
-		BP->shape->color    = Vector3r(double(rand()) / RAND_MAX, double(rand()) / RAND_MAX, double(rand()) / RAND_MAX);
-		scene->bodies->insert(BP);
+	for (vector<vector<Vector3r>>::iterator p = packed_polyhedrons.begin(); p != packed_polyhedrons.end(); ++p) {
+		shared_ptr<Body> body_ptr = NewPolyhedra(*p, mat);
+		body_ptr->shape->color    = Vector3r(randColor(rng), randColor(rng), randColor(rng));
+		scene->bodies->insert(body_ptr);
 	}
-	return v;
+	return vertices;
 }
 
 
