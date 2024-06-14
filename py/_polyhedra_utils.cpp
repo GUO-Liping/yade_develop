@@ -416,19 +416,29 @@ vector<Vector3r> fillBox_cpp(Vector3r minCoord, Vector3r maxCoord, Vector3r size
 
 
 //**********************************************************************************
-//generate "packing" of non-overlapping polyhedrons
-vector<Vector3r> fillBox_Mycpp(Vector3r minCoord, Vector3r maxCoord, Vector3r sizemin, Vector3r sizemax, int seed, shared_ptr<Material> mat)
+//generate "packing" of non-overlapping polyhedrons V2.0
+vector<Vector3r> fillBox_cppV2(vector<Vector3r> vec_polyheron, Vector3r sizemin, Vector3r sizemax, int seed, shared_ptr<Material> mat)
 {
+
 	vector<Vector3r> v;
-	Polyhedra        trialP;
-	Polyhedron       trial, trial_moved;
+	Polyhedra        trialP, boundP;
+	Polyhedron       trial, trial_moved, bound;
 	srand(seed);
 	int                      it = 0;
 	vector<Polyhedron>       polyhedrons;
 	vector<vector<Vector3r>> vv;
 	Vector3r                 position;
 	bool                     intersection;
+	bool					 inside_polyhedron;
 	int                      count = 0;
+
+	Vector3r maxCoord = {1.0, 1.0, 1.0};
+	Vector3r minCoord = {0.0, 0.0, 0.0};
+
+	boundP.Clear();
+	boundP.v = vec_polyheron;
+	boundP.Initialize();
+	bound = boundP.GetPolyhedron();
 
 	//it - number of trials to make packing possibly more/less dense
 	Vector3r random_size;
@@ -455,26 +465,18 @@ vector<Vector3r> fillBox_Mycpp(Vector3r minCoord, Vector3r maxCoord, Vector3r si
 			std::transform(trial.points_begin(), trial.points_end(), trial.points_begin(), t_rot);
 		}
 
-		//**********************************************************************************************************************************************
-		// most important part - generate random position for polyhedron
-
-		position = Vector3r(rand() * (maxCoord[0] - minCoord[0]), rand() * (maxCoord[1] - minCoord[1]), rand() * (maxCoord[2] - minCoord[2])) / RAND_MAX
-		        + minCoord;
-		while (i < 100){
-			boundary
-			random point=min + (max - min) * rand() / RAND_MAX;
-			Polyhedron P = vec_points
-			CGALpoint rand_point = CGALpoint(x, y, z);
-			bool condition = Is_inside_Polyhedron(Polyhedron P, CGALpoint inside);
-			if condition{
+		int i = 0;
+		while (i < 100) {
+			position = Vector3r(rand() * (maxCoord[0] - minCoord[0]), rand() * (maxCoord[1] - minCoord[1]), rand() * (maxCoord[2] - minCoord[2])) / RAND_MAX + minCoord;
+			CGALpoint pos_CGAL(position(0), position(1), position(2));
+			inside_polyhedron = Is_inside_Polyhedron(bound, pos_CGAL);
+			if (inside_polyhedron) {
 				break;
 			}
-
-			else{
-				continue;
+			else {
+				i = i + 1;
 			}
 		}
-		//**********************************************************************************************************************************************
 
 		//move CGAL structure Polyhedron
 		Transformation transl(CGAL::TRANSLATION, ToCGALVector(position));
@@ -505,7 +507,7 @@ vector<Vector3r> fillBox_Mycpp(Vector3r minCoord, Vector3r maxCoord, Vector3r si
 			count++;
 		}
 	}
-	cout << "generated " << count << " polyhedrons" << endl;
+	cout << " V2.0 generated" << count << " polyhedrons" << endl;
 
 	//can't be used - no information about material
 	Scene* scene = Omega::instance().getScene().get();
@@ -516,6 +518,7 @@ vector<Vector3r> fillBox_Mycpp(Vector3r minCoord, Vector3r maxCoord, Vector3r si
 	}
 	return v;
 }
+
 
 //**************************************************************************
 /* Generate truncated icosahedron*/
@@ -757,6 +760,7 @@ try {
 	        "Get timestep accoring to the velocity of P-Wave propagation; computed from sphere radii, rigidities and masses.");
 	py::def("do_Polyhedras_Intersect", do_Polyhedras_Intersect, "check polyhedras intersection");
 	py::def("fillBox_cpp", fillBox_cpp, "Generate non-overlaping polyhedrons in box");
+	py::def("fillBox_cppV2", fillBox_cppV2, "Generate non-overlaping polyhedrons in a polyhedron");
 	py::def("fillBoxByBalls_cpp", fillBoxByBalls_cpp, "Generate non-overlaping 'spherical' polyhedrons in box");
 	py::def("MinCoord", MinCoord, "returns min coordinates");
 	py::def("MaxCoord", MaxCoord, "returns max coordinates");
