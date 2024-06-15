@@ -418,7 +418,7 @@ vector<Vector3r> fillBox_cpp(Vector3r minCoord, Vector3r maxCoord, Vector3r size
 
 
 //**********************************************************************************
-//generate "packing" of non-overlapping polyhedrons V0.0.2
+//generate "packing" of non-overlapping polyhedrons inside an arbitrary polyhedron boundary (Hull) V0.0.2
 vector<Vector3r> fillHull_cpp(vector<Vector3r> vec_polyheron, Vector3r sizemin, Vector3r sizemax, int seed, shared_ptr<Material> mat)
 {
 
@@ -446,20 +446,20 @@ vector<Vector3r> fillHull_cpp(vector<Vector3r> vec_polyheron, Vector3r sizemin, 
 	
 	//it - number of trials to make packing possibly more/less dense
 	std::mt19937 rng(seed);
-    std::uniform_real_distribution<double> randSizeX(sizemin[0], sizemax[0]);
-    std::uniform_real_distribution<double> randSizeY(sizemin[1], sizemax[1]);
-    std::uniform_real_distribution<double> randSizeZ(sizemin[2], sizemax[2]);
-    std::uniform_real_distribution<double> randCoordX(minCoord[0], maxCoord[0]);
-    std::uniform_real_distribution<double> randCoordY(minCoord[1], maxCoord[1]);
-    std::uniform_real_distribution<double> randCoordZ(minCoord[2], maxCoord[2]);
+	std::uniform_real_distribution<double> randSizeX(sizemin[0], sizemax[0]);
+	std::uniform_real_distribution<double> randSizeY(sizemin[1], sizemax[1]);
+	std::uniform_real_distribution<double> randSizeZ(sizemin[2], sizemax[2]);
+	std::uniform_real_distribution<double> randCoordX(minCoord[0], maxCoord[0]);
+	std::uniform_real_distribution<double> randCoordY(minCoord[1], maxCoord[1]);
+	std::uniform_real_distribution<double> randCoordZ(minCoord[2], maxCoord[2]);
 	std::uniform_real_distribution<double> randColor(0.0, 1.0); // 颜色值在 0 到 1 之间
 
 	// calculate the volume of the polyhedron
 	Real volume_polyhedron = boundaryP.GetVolume();
 	Real volume_min = sizemin[0] * sizemin[1] * sizemin[2];
-	int max_iterations = (volume_min > 1e-6) ? volume_polyhedron / volume_min : 1000;
+	int max_iterations = (volume_min > 1e-6) ? static_cast<int> volume_polyhedron/ volume_min : 1000;
 	int count = 0;
-	int trial_count = 0;
+	int iteration_count = 0;
 
 	for (int i = 0; i < max_iterations; ++i) {
 		Polyhedra trialP;
@@ -479,11 +479,11 @@ vector<Vector3r> fillHull_cpp(vector<Vector3r> vec_polyheron, Vector3r sizemin, 
 		Vector3r position;
 
 		// find a position of random point inside the polyhedron
-		for (int j = 0; j < max_iterations; ++j) {
+		for (int j = 0; j < 100; ++j) {
 			position = Vector3r(randCoordX(rng), randCoordY(rng), randCoordZ(rng));
 			CGALpoint position_CGAL(position(0), position(1), position(2));
-			trial_count++;
-			std::cout << "This is the " << trial_count << " th trial" << std::endl;
+			iteration_count++;
+			std::cout << "This is the " << j << " th trial for a new position inside the boundary hull" << std::endl;
 			
 			if (Is_inside_Polyhedron(boundP, position_CGAL)) {
 				inside_polyhedron = true;
@@ -491,8 +491,8 @@ vector<Vector3r> fillHull_cpp(vector<Vector3r> vec_polyheron, Vector3r sizemin, 
 			}
 		}
 
-		if (trial_count > 1000000) {
-			std::cout << "fill_Hull V0.0.3: too many trials > 1000000, stopping" << std::endl;
+		if (iteration_count > 10000) {
+			std::cout << "fill_Hull V0.0.3: too many trials > 10000, stopping" << std::endl;
 			break;
 		}
 
