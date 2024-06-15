@@ -418,7 +418,7 @@ vector<Vector3r> fillBox_cpp(Vector3r minCoord, Vector3r maxCoord, Vector3r size
 
 
 //**********************************************************************************
-//generate "packing" of non-overlapping polyhedrons inside an arbitrary polyhedron boundary (Hull) V0.0.2
+//generate "packing" of non-overlapping polyhedrons inside an arbitrary polyhedron boundary (Hull) V0.1.0
 vector<Vector3r> fillHull_cpp(vector<Vector3r> vec_polyheron, Vector3r sizemin, Vector3r sizemax, int seed, shared_ptr<Material> mat)
 {
 
@@ -457,7 +457,8 @@ vector<Vector3r> fillHull_cpp(vector<Vector3r> vec_polyheron, Vector3r sizemin, 
 	// calculate the volume of the polyhedron
 	Real volume_polyhedron = boundaryP.GetVolume();
 	Real volume_min = sizemin[0] * sizemin[1] * sizemin[2];
-	int max_iterations = (volume_min > 1e-6) ? static_cast<int> volume_polyhedron/ volume_min : 1000;
+	int max_iterations = (volume_min > 1e-6) ? static_cast<int>(volume_polyhedron / volume_min) : 1000;
+
 	int count = 0;
 	int iteration_count = 0;
 
@@ -479,11 +480,10 @@ vector<Vector3r> fillHull_cpp(vector<Vector3r> vec_polyheron, Vector3r sizemin, 
 		Vector3r position;
 
 		// find a position of random point inside the polyhedron
-		for (int j = 0; j < 100; ++j) {
+		for (int j = 0; j < 1000; ++j) {
 			position = Vector3r(randCoordX(rng), randCoordY(rng), randCoordZ(rng));
 			CGALpoint position_CGAL(position(0), position(1), position(2));
 			iteration_count++;
-			std::cout << "This is the " << j << " th trial for a new position inside the boundary hull" << std::endl;
 			
 			if (Is_inside_Polyhedron(boundP, position_CGAL)) {
 				inside_polyhedron = true;
@@ -491,13 +491,28 @@ vector<Vector3r> fillHull_cpp(vector<Vector3r> vec_polyheron, Vector3r sizemin, 
 			}
 		}
 
+		// Check if the new polyhedron is inside the boundary hull
+		if (!inside_polyhedron) continue;
+				
+		std::cout << "It is " << iteration_count << "th iteration" << std::endl;
+		
 		if (iteration_count > 10000) {
-			std::cout << "fill_Hull V0.0.3: too many trials > 10000, stopping" << std::endl;
-			break;
+			std::cout << "The iteration reaches " << iteration_count << ", generating " << count << " polyhedrons!" << std::endl;
+			std::cout << "Do you want to continue? (y/n): " << std::endl;
+			std::string input_str;
+			std::getline(std::cin, input_str);
+
+			if (input_str == "y") {
+				iteration_count = 0;
+				continue;
+			} else if (input_str == "n") {
+			    break;
+			} else {
+				std::cout << "Invalid input, stopping..." << std::endl;
+				break;
+			}
 		}
 
-		if (!inside_polyhedron) continue;
-		
 		//move CGAL structure Polyhedron
 		Polyhedron trial_moved = trial;
 		Transformation transl(CGAL::TRANSLATION, ToCGALVector(position));
@@ -529,7 +544,7 @@ vector<Vector3r> fillHull_cpp(vector<Vector3r> vec_polyheron, Vector3r sizemin, 
 			++count;
 		}
 	}
-	std::cout << "fill_Hull V0.0.3 generated " << count << " polyhedrons" << std::endl;
+	std::cout << "_fill_Hull_cpp V0.1.0: generated " << count << " polyhedrons" << std::endl;
 
 	//can't be used - no information about material
 	Scene* scene = Omega::instance().getScene().get();
